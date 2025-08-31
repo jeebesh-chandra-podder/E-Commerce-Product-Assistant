@@ -10,4 +10,9 @@ wheels/
 .venv
 pro-assist
 
+*.env
+.env.local
+.vscode/
+logs/
+.env
 
