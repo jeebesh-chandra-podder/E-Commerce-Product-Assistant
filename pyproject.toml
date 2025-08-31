@@ -5,8 +5,21 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "langchain>=0.3.27",
-    "langchain-core>=0.3.75",
-    "python-dotenv>=1.1.1",
-    "streamlit>=1.49.1",
+    "beautifulsoup4==4.13.5",
+    "fastapi==0.116.1",
+    "html5lib==1.1",
+    "jinja2==3.1.6",
+    "langchain==0.3.27",
+    "langchain-astradb==0.6.1",
+    "langchain-core==0.3.75",
+    "langchain-google-genai==2.1.8",
+    "langchain-groq==0.3.6",
+    "lxml==6.0.1",
+    "python-dotenv==1.1.1",
+    "python-multipart==0.0.20",
+    "selenium==4.35.0",
+    "streamlit==1.49.1",
+    "structlog==25.4.0",
+    "undetected-chromedriver==3.5.5",
+    "uvicorn==0.35.0",
 ]
