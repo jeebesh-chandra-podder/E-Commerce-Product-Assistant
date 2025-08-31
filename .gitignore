@@ -16,3 +16,6 @@ pro-assist
 logs/
 .env
 
+.github
+
+
