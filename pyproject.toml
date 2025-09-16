@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]         # PEP 660 editable support ke liye naya setuptools
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "e-commerce-product-assistant"
 version = "0.1.0"
@@ -18,8 +22,21 @@ dependencies = [
     "python-dotenv==1.1.1",
     "python-multipart==0.0.20",
     "selenium==4.35.0",
+    "setuptools>=80.9.0",
     "streamlit==1.49.1",
     "structlog==25.4.0",
     "undetected-chromedriver==3.5.5",
     "uvicorn==0.35.0",
 ]
+
+# Optional: authors, license
+authors = [{ name = "Sunny Savita" }]
+license = { text = "Proprietary" }
+
+# Optional: CLI command (python -m pip install -e . ke baad yeh create hoga)
+[project.scripts]
+ecomm-assistant = "ecomm_prod_assistant.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["prod_assistant"]
+include = ["ecomm_prod_assistant*"]
