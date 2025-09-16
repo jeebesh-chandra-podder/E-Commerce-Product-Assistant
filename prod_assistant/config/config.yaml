@@ -1,4 +1,4 @@
-faiss_db:
+astra_db:
   collection_name: "ecommercedata"
 
 embedding_model:
@@ -6,15 +6,15 @@ embedding_model:
   model_name: "models/text-embedding-004"
 
 retriever:
-  top_k: 10
+  top_k: 4
 
 llm:
   groq:
     provider: "groq"
-    #model_name: "openai/gpt-oss-20b"
+    #model_name: "deepseek-r1-distill-llama-70b"
     model_name: "openai/gpt-oss-120b"
     temperature: 0
-    max_output_tokens: 8192
+    max_output_tokens: 2048
 
   google:
     provider: "google"

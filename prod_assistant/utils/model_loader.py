@@ -9,14 +9,33 @@ from logger import GLOBAL_LOGGER as log
 from exception.custom_exception import ProductAssistantException
 import asyncio
 
-
+# ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+'''
+This class is like a security guard for your secret keys. Its only job is to find, verify, and provide API keys when needed. 
+This is a great practice called Separation of Concerns—you have one piece of code dedicated to one specific job.
+'''
 class ApiKeyManager:
+    
+    '''
+    This defines a list of API keys that are absolutely necessary for the application to run. 
+    If any of these are missing, the app should stop immediately. 
+    This is much better than letting it run and then crash later when it tries to use a key that isn't there.
+    '''
     REQUIRED_KEYS = ["GROQ_API_KEY", "GOOGLE_API_KEY"]
 
+    # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    '''
+    This is the constructor (__init__) method, which runs automatically when you create an ApiKeyManager
+    '''
     def __init__(self):
         self.api_keys = {}
         raw = os.getenv("API_KEYS")
 
+        '''
+        It first looks for a single environment variable called API_KEYS. 
+        The idea is that in a production environment (like a server or a cloud service like AWS ECS), 
+        you might pass all your secrets together as a single JSON string.
+        '''
         if raw:
             try:
                 parsed = json.loads(raw)
@@ -27,7 +46,11 @@ class ApiKeyManager:
             except Exception as e:
                 log.warning("Failed to parse API_KEYS as JSON", error=str(e))
 
-        # Fallback to individual env vars
+        '''
+        This is a fallback mechanism, which is excellent design. 
+        If a key wasn't found in the API_KEYS JSON blob, it then tries to find it as a standalone environment variable (e.g., GOOGLE_API_KEY=...). 
+        This makes the code flexible—it works one way in production (JSON blob) and another way for local development (from a .env file).
+        '''
         for key in self.REQUIRED_KEYS:
             if not self.api_keys.get(key):
                 env_val = os.getenv(key)
@@ -35,7 +58,12 @@ class ApiKeyManager:
                     self.api_keys[key] = env_val
                     log.info(f"Loaded {key} from individual env var")
 
-        # Final check
+        '''
+        This is the final, crucial check. After trying both methods, it confirms that all keys from the REQUIRED_KEYS list have been found.
+        -> If any are missing, it logs a serious error and raises an exception. This stops the program with a clear message, which is exactly what you want.
+        -> The last line logs that the keys were loaded, but it cleverly only shows the first 6 characters (v[:6] + "..."). 
+        This is a critical security practice. You never want to print entire secret keys to your logs, where they could be exposed.
+        '''
         missing = [k for k in self.REQUIRED_KEYS if not self.api_keys.get(k)]
         if missing:
             log.error("Missing required API keys", missing_keys=missing)
@@ -44,6 +72,11 @@ class ApiKeyManager:
         log.info("API keys loaded", keys={k: v[:6] + "..." for k, v in self.api_keys.items()})
 
 
+    # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    '''
+    This is a simple "getter" method. Other parts of the code will call api_key_mgr.get("GOOGLE_API_KEY") to safely retrieve a key.
+    If the key doesn't exist for some reason, it raises an error.
+    '''
     def get(self, key: str) -> str:
         val = self.api_keys.get(key)
         if not val:
@@ -51,11 +84,23 @@ class ApiKeyManager:
         return val
 
 
+# ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 class ModelLoader:
-    """
-    Loads embedding models and LLMs based on config and environment.
-    """
+    '''
+    This is the main class of the file. It uses the ApiKeyManager and your configuration files to prepare the AI models.
+    '''
 
+    # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    '''
+    It checks an environment variable ENV. 
+    If the environment is not production, it calls load_dotenv(). 
+    This is the magic that loads your .env file for local development. 
+    In production, you'd set the ENV variable to production, and this step would be skipped.
+
+    It then creates an instance of our ApiKeyManager to handle the keys.
+
+    Finally, it calls load_config() to load the rest of the application settings (like which model names to use, temperature, etc.) from a file.
+    '''
     def __init__(self):
         if os.getenv("ENV", "local").lower() != "production":
             load_dotenv()
@@ -67,12 +112,18 @@ class ModelLoader:
         self.config = load_config()
         log.info("YAML config loaded", config_keys=list(self.config.keys()))
 
+    # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     
+    '''
+    This method loads the embedding model. An embedding model's job is to turn text (like "hello world") into a list of numbers (a vector). 
+    This numerical representation helps the AI understand the meaning and context of the text.
 
+    It gets the model name from the config file you loaded earlier.
+
+    The "asyncio" part is a technical but important patch. The underlying Google library sometimes needs something called an "event loop" to be running. 
+    This code safely checks if one exists and creates one if it doesn't, preventing a common error. This shows attention to detail.
+    '''
     def load_embeddings(self):
-        """
-        Load and return embedding model from Google Generative AI.
-        """
         try:
             model_name = self.config["embedding_model"]["model_name"]
             log.info("Loading embedding model", model=model_name)
@@ -92,10 +143,19 @@ class ModelLoader:
             raise ProductAssistantException("Failed to load embedding model", sys)
 
 
+    # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    
+    '''
+    This method loads the main Language Model (LLM)—the one that does the chatting and text generation.
+
+    It's designed to be flexible. It reads an environment variable LLM_PROVIDER to decide which model to load ('google', 'groq', etc.). If that variable isn't set, it defaults to 'google'.
+
+    It then reads the specific settings for that provider from your config file (model name, temperature, etc.).
+
+    Using an if/elif/else block, it instantiates the correct object (ChatGoogleGenerativeAI or ChatGroq).
+    '''
     def load_llm(self):
-        """
-        Load and return the configured LLM model.
-        """
+
         llm_block = self.config["llm"]
         provider_key = os.getenv("LLM_PROVIDER", "google")
 
@@ -124,6 +184,7 @@ class ModelLoader:
                 model=model_name,
                 api_key=self.api_key_mgr.get("GROQ_API_KEY"), #type: ignore
                 temperature=temperature,
+                max_output_tokens=max_tokens
             )
 
         # elif provider == "openai":
@@ -139,6 +200,7 @@ class ModelLoader:
             raise ValueError(f"Unsupported LLM provider: {provider}")
 
 
+# ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     loader = ModelLoader()
 
