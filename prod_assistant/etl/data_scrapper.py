@@ -2,32 +2,68 @@ import csv
 import time
 import re
 import os
+
+''' This is a famous library for parsing HTML. Imagine HTML as a tree with many branches. BeautifulSoup helps you navigate this tree to find the exact leaves (pieces of data) you're looking for. '''
 from bs4 import BeautifulSoup
 
-import undetected_chromedriver as uc #Imports a special version of the Selenium ChromeDriver. It's designed to make the automated browser look more like a human-operated one, helping to avoid being blocked by websites.
+'''
+This is a key ingredient. Many websites have security measures to detect and block automated browsers (bots). 
+undetected-chromedriver is a special version of the browser driver that adds tricks to make your script look more like a real human is browsing, increasing the chance of success.
+'''
+import undetected_chromedriver as uc 
 
-from selenium.webdriver.common.by import By # From the Selenium library, this imports By, which is used to specify how to find an element on a page (e.g., by its class name, ID, or XPath).
-
+'''
+Selenium is the main engine here. It's a tool that allows your code to take control of a web browser. 
+You're importing specific helpers from it: By to tell Selenium how to find things (e.g., by class name), Keys to simulate keyboard presses (like scrolling down), and ActionChains to perform a sequence of actions.
+'''
+from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 
+# ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+'''
+This class is a blueprint for your scraper. It groups all the related functions (get_top_reviews, scrape_flipkart_products, etc.) and data into one organized unit.
+'''
 class FlipkartScraper:
+    # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    '''
+    The __init__ method is the constructor. When you create a FlipkartScraper, this code runs first. 
+    It sets up a directory named data where your output CSV file will be saved. os.makedirs(..., exist_ok=True) is a safe way to create a directory, as it won't crash if the directory already exists.
+    '''
     def __init__(self, output_dir="data"):
         self.output_dir = output_dir
         os.makedirs(self.output_dir, exist_ok=True)
 
+    # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    '''
+    This method is a specialist. Its only job is to go to a single product's page and extract the top reviews.
+    '''
     def get_top_reviews(self,product_url,count=2):
-        """Get the top reviews for a product.
-        """
+        
         options = uc.ChromeOptions()
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-blink-features=AutomationControlled")
-        driver = uc.Chrome(options=options,use_subprocess=True)
+        driver = uc.Chrome(
+            options=options,
+            use_subprocess=True
+        )
 
         if not product_url.startswith("http"):
             return "No reviews found"
 
         try:
+
+            '''
+            It opens the browser and navigates to the product_url.
+
+            -> time.sleep(4): This is crucial. It tells the script to wait for 4 seconds. You need to give the page time to fully load all its content. 
+            Without this, you might try to grab data that hasn't appeared yet.
+
+            -> Popup Handling: The try/except block is a defensive move. It tries to find and click the '✕' button on a popup. If there's no popup, it simply continues without crashing.
+
+            -> Scrolling: The for loop simulates a user pressing the END key on their keyboard four times. 
+            This is a clever trick to force the website to load more content, as many modern sites use "lazy loading" where reviews and other data only appear as you scroll down.
+            '''
             driver.get(product_url)
             time.sleep(4)
             try:
@@ -40,6 +76,17 @@ class FlipkartScraper:
                 ActionChains(driver).send_keys(Keys.END).perform()
                 time.sleep(1.5)
 
+            '''
+            -> driver.page_source: After Selenium has done its job (loading the page, closing popups, scrolling), this gets the final, fully-loaded HTML of the page.
+
+            -> BeautifulSoup(...): This passes the HTML to BeautifulSoup, making it ready for parsing.
+
+            -> soup.select(...): This is where the magic happens. It uses CSS selectors to find all the <div> elements on the page that match the given class names, which the developer identified as the containers for review text.
+
+            -> Deduplication: The code uses a set called seen to make sure it doesn't save the same review text twice. This is good practice.
+
+            -> driver.quit(): This is extremely important. It properly closes the browser window and shuts down the driver process. If you forget this, you can end up with dozens of hidden browser processes eating up your computer's memory.
+            '''
             soup = BeautifulSoup(driver.page_source, "html.parser")
             review_blocks = soup.select("div._27M-vq, div.col.EPCmJX, div._6K-7Co")
             seen = set()
@@ -58,9 +105,14 @@ class FlipkartScraper:
         driver.quit()
         return " || ".join(reviews) if reviews else "No reviews found"
     
+    # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    '''
+    This is the main orchestrator. It ties everything together to perform the full search-and-scrape operation.
+    '''
     def scrape_flipkart_products(self, query, max_products=1, review_count=2):
-        """Scrape Flipkart products based on a search query.
-        """
+        '''
+        -> It builds a search URL (e.g., .../search?q=laptop) and opens it.
+        '''
         options = uc.ChromeOptions()
         driver = uc.Chrome(options=options,use_subprocess=True)
         search_url = f"https://www.flipkart.com/search?q={query.replace(' ', '+')}"
@@ -75,6 +127,17 @@ class FlipkartScraper:
         time.sleep(2)
         products = []
 
+        '''
+        -> driver.find_elements(By.CSS_SELECTOR, "div[data-id]"): This finds the list of all product containers on the search results page.
+
+        -> It then loops through each product (item) and uses more find_element calls with specific class names (div.KzDlHZ, div.Nx9bqj) to pinpoint the exact title, price, and rating.
+
+        -> Regular Expressions: It uses re.search and re.findall to pluck out specific pieces of information, like the number of reviews or the product ID from a URL. This is more precise than just splitting strings.
+
+        -> Putting it Together: For each product, it calls self.get_top_reviews() to fetch the reviews for that item. This is excellent design—reusing the specialized function we just looked at.
+
+        -> Finally, it returns a list where each item is another list containing all the scraped details of one product.
+        '''
         items = driver.find_elements(By.CSS_SELECTOR, "div[data-id]")[:max_products]
         for item in items:
             try:
@@ -100,6 +163,7 @@ class FlipkartScraper:
         driver.quit()
         return products
     
+    # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     def save_to_csv(self, data, filename="product_reviews.csv"):
         """Save the scraped product reviews to a CSV file."""
         if os.path.isabs(filename):
