@@ -20,12 +20,12 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 
-# ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 '''
 This class is a blueprint for your scraper. It groups all the related functions (get_top_reviews, scrape_flipkart_products, etc.) and data into one organized unit.
 '''
 class FlipkartScraper:
-    # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     '''
     The __init__ method is the constructor. When you create a FlipkartScraper, this code runs first. 
     It sets up a directory named data where your output CSV file will be saved. os.makedirs(..., exist_ok=True) is a safe way to create a directory, as it won't crash if the directory already exists.
@@ -34,7 +34,7 @@ class FlipkartScraper:
         self.output_dir = output_dir
         os.makedirs(self.output_dir, exist_ok=True)
 
-    # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     '''
     This method is a specialist. Its only job is to go to a single product's page and extract the top reviews.
     '''
@@ -104,8 +104,8 @@ class FlipkartScraper:
 
         driver.quit()
         return " || ".join(reviews) if reviews else "No reviews found"
-    
-    # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+    # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     '''
     This is the main orchestrator. It ties everything together to perform the full search-and-scrape operation.
     '''
@@ -162,8 +162,8 @@ class FlipkartScraper:
 
         driver.quit()
         return products
-    
-    # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+    # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     def save_to_csv(self, data, filename="product_reviews.csv"):
         """Save the scraped product reviews to a CSV file."""
         if os.path.isabs(filename):
