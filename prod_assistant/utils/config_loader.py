@@ -9,16 +9,17 @@ This is a helper function (programmers often use a single underscore _ at the be
 Its only job is to find the absolute path to the main project folder.
 '''
 def _project_root() -> Path:
-    # .../utils/config_loader.py -> parents[1] == project root
+    return Path(__file__).resolve().parents[1]
     '''
+    .../utils/config_loader.py -> parents[1] == project root
     -> __file__: This is a special Python variable that holds the path to the current file (config_loader.py).
     -> Path(__file__): This turns that string path into a Path object.
-    -> .resolve(): This converts the path into a full, absolute path, like C:\Users\YourName\MyProject\utils\config_loader.py.
+    -> .resolve(): This converts the path into a full, absolute path, like <drive>/<jeebesh>/YourName/MyProject/utils/config_loader.py.
     -> .parents[1]: This is the clever part. .parents gives you a list of all the parent directories.
         -> parents[0] would be the immediate parent: the utils folder.
         -> parents[1] is the parent of utils: the main MyProject folder. This is our project root!
     '''
-    return Path(__file__).resolve().parents[1]
+    
 
 # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 

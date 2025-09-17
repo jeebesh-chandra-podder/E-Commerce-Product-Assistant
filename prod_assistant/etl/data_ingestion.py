@@ -48,7 +48,6 @@ class DataIngestion:
         self.db_application_token = os.getenv("ASTRA_DB_APPLICATION_TOKEN")
         self.db_keyspace = os.getenv("ASTRA_DB_KEYSPACE")
 
-
     # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     
     '''
