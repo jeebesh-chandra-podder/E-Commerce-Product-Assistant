@@ -35,9 +35,7 @@ def build_chain(query):
     retriever = retriever_obj.load_retriever()
     retrieved_docs=retriever.invoke(query)
     
-    #retrieved_contexts = [format_docs(doc) for doc in retrieved_docs]
-    
-    retrieved_contexts = [format_docs(retrieved_docs)]
+    retrieved_contexts = [format_docs(doc) for doc in retrieved_docs]
     
     llm = model_loader.load_llm()
     prompt = ChatPromptTemplate.from_template(

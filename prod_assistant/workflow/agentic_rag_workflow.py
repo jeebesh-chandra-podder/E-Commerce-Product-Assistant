@@ -9,37 +9,16 @@ from prompt_library.prompts import PROMPT_REGISTRY, PromptType
 from retriever.retrieval import Retriever
 from utils.model_loader import ModelLoader
 from langgraph.checkpoint.memory import MemorySaver
-'''
-PROMPT_REGISTRY: A library of pre-written prompts.
-Retriever: Your custom code for fetching documents.
-ModelLoader: Your helper for loading the LLM.
-MemorySaver: A LangGraph feature to save the conversation history, so the agent can remember past interactions.
-'''
+from evaluation.ragas_eval import evaluate_context_precision, evaluate_response_relevancy
 
-# --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 class AgenticRAG:
-    # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    '''
-    Purpose: This defines the "memory" or "state" of your agent as it moves through the flowchart. It's a dictionary that must contain a key called messages.
+    """Agentic RAG pipeline using LangGraph."""
 
-    Details: The messages value is a sequence (like a list) of BaseMessage objects. 
-    The add_messages part is a special helper from LangGraph that ensures new messages are correctly added to the list instead of overwriting it.
-
-    Analogy: Think of AgentState as a clipboard that each worker in an assembly line passes to the next. The clipboard always has a sheet for "messages," and each worker adds their notes to it.
-    '''
     class AgentState(TypedDict):
         messages: Annotated[Sequence[BaseMessage], add_messages]
 
-    # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     def __init__(self):
-        '''
-        Retriever(): Creates an instance of your document retriever.
-        ModelLoader(): Creates an instance of your model loader.
-        self.model_loader.load_llm(): Loads the actual LLM so it's ready to answer questions.
-        MemorySaver(): Sets up the memory system to save conversation history.
-        _build_workflow(): This is crucial. It calls another method (which we'll see next) to define the actual steps and logic of the agent's flowchart.
-        self.workflow.compile(...): This takes the defined flowchart (workflow) and turns it into a runnable application. The checkpointer is included so it can save its state at each step.
-        '''
         self.retriever_obj = Retriever()
         self.model_loader = ModelLoader()
         self.llm = self.model_loader.load_llm()
@@ -48,10 +27,6 @@ class AgenticRAG:
         self.app = self.workflow.compile(checkpointer=self.checkpointer)
 
     # ---------- Helpers ----------
-    # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    '''
-    A simple but important utility function. Its only job is to take the raw documents found by the retriever and format them into a clean, human-readable string that the LLM can easily understand.
-    '''
     def _format_docs(self, docs) -> str:
         if not docs:
             return "No relevant documents found."
@@ -68,16 +43,6 @@ class AgenticRAG:
         return "\n\n---\n\n".join(formatted_chunks)
 
     # ---------- Nodes ----------
-    # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    '''
-    This is the first stop and the main decision-maker (a "router"). It inspects the user's latest message to decide what to do next.
-
-    If the message contains keywords like "price," "review," or "product," it decides that it needs more information. 
-    It returns a special message, "TOOL: retriever", which tells the graph to go to the Retriever node next.
-
-    If the message seems like a general question (e.g., "hello"), it answers directly without using the retriever. 
-    The workflow then goes straight to the end.
-    '''
     def _ai_assistant(self, state: AgentState):
         print("--- CALL ASSISTANT ---")
         messages = state["messages"]
@@ -93,13 +58,6 @@ class AgenticRAG:
             response = chain.invoke({"question": last_message})
             return {"messages": [HumanMessage(content=response)]}
 
-    # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    
-    '''
-    This is the "Retrieval" part of RAG. It uses the retriever object you initialized earlier to search a database for documents relevant to the user's query.
-
-    Logic: It takes the latest message, sends it to the retriever, gets back a list of documents, formats them using the _format_docs helper, and adds the formatted text to the messages in the state.
-    '''
     def _vector_retriever(self, state: AgentState):
         print("--- RETRIEVER ---")
         query = state["messages"][-1].content
@@ -108,13 +66,6 @@ class AgenticRAG:
         context = self._format_docs(docs)
         return {"messages": [HumanMessage(content=context)]}
 
-    # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    '''
-    Purpose: This is a fantastic and advanced step! Instead of just assuming the retrieved documents are good, this node asks the LLM to act as a "grader."
-    Logic: It looks at the user's original question and the retrieved documents and asks the LLM a simple question: "Are these docs relevant?"
-        If the LLM says "yes," this node returns the string "generator", telling the graph to proceed to the Generator node to write an answer.
-        If the LLM says "no," it returns "rewriter", telling the graph that the retrieved documents were bad and a different approach is needed.
-    '''
     def _grade_documents(self, state: AgentState) -> Literal["generator", "rewriter"]:
         print("--- GRADER ---")
         question = state["messages"][0].content
@@ -129,12 +80,6 @@ class AgenticRAG:
         score = chain.invoke({"question": question, "docs": docs})
         return "generator" if "yes" in score.lower() else "rewriter"
 
-    # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    '''
-    Purpose: This is the "Generation" part of RAG. It crafts the final answer for the user.
-    Logic: It takes the original question and the relevant documents (the context) and puts them into a detailed prompt. 
-    It then sends this complete prompt to the LLM to get a final, context-aware answer.
-    '''
     def _generate(self, state: AgentState):
         print("--- GENERATE ---")
         question = state["messages"][0].content
@@ -146,15 +91,6 @@ class AgenticRAG:
         response = chain.invoke({"context": docs, "question": question})
         return {"messages": [HumanMessage(content=response)]}
 
-    # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    
-    '''
-    Purpose: This node is the recovery plan. It's used when the _grade_documents node decided the retrieved documents were irrelevant.
-
-    Logic: It asks the LLM to rewrite the user's original question to be clearer or more specific. 
-    For example, if the user asked "tell me about that phone," this node might rewrite it to "what are the specifications and price of the iPhone 15?". 
-    The new, rewritten question is then added to the state.
-    '''
     def _rewrite(self, state: AgentState):
         print("--- REWRITE ---")
         question = state["messages"][0].content
@@ -164,22 +100,6 @@ class AgenticRAG:
         return {"messages": [HumanMessage(content=new_q.content)]}
 
     # ---------- Build Workflow ----------
-    # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    '''
-    Purpose: This method connects all the nodes into a logical flowchart.
-    Analogy: If the nodes are the workers on an assembly line, this section is the map that shows who passes their work to whom.
-
-    The Flow:
-    START -> Assistant: Every query begins at the Assistant node.
-    From Assistant: A conditional edge.
-    If the assistant decided to use a tool, the flow goes to the Retriever node.
-    Otherwise, the flow goes directly to END.
-    From Retriever: Another conditional edge. This one uses the _grade_documents function to decide the path.
-    If the function returns "generator", the flow goes to the Generator node.
-    If it returns "rewriter", the flow goes to the Rewriter node.
-    Generator -> END: After generating an answer, the process is finished.
-    Rewriter -> Assistant: This is a cycle or loop. After rewriting the question, the workflow sends the new question back to the Assistant to try the whole process again. This is a very powerful concept.
-    '''
     def _build_workflow(self):
         workflow = StateGraph(self.AgentState)
         workflow.add_node("Assistant", self._ai_assistant)
@@ -203,15 +123,10 @@ class AgenticRAG:
         return workflow
 
     # ---------- Public Run ----------
-    # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    '''
-    run method: This is the clean, public-facing function you call to use the agent. It hides all the complex internal steps. The thread_id is used by the MemorySaver to keep track of different conversations separately.
-    '''
     def run(self, query: str,thread_id: str = "default_thread") -> str:
-        result = self.app.invoke(
-            {"messages": [HumanMessage(content=query)]},
-            config={"configurable": {"thread_id": thread_id}}
-        )
+        """Run the workflow for a given query and return the final answer."""
+        result = self.app.invoke({"messages": [HumanMessage(content=query)]},
+                                 config={"configurable": {"thread_id": thread_id}})
         return result["messages"][-1].content
     
         # function call with be asscoiate
@@ -222,8 +137,23 @@ class AgenticRAG:
         #else:
             #contine
 
-# --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 if __name__ == "__main__":
+    
+    
     rag_agent = AgenticRAG()
     answer = rag_agent.run("What is the price of iPhone 15?")
     print("\nFinal Answer:\n", answer)
+    
+    
+    # retrieved_contexts,response = invoke_chain(user_query)
+    
+    # #this is not an actual output this have been written to test the pipeline
+    # #response="iphone 16 plus, iphone 16, iphone 15 are best phones under 1,00,000 INR."
+    
+    # context_score = evaluate_context_precision(user_query,response,retrieved_contexts)
+    # relevancy_score = evaluate_response_relevancy(user_query,response,retrieved_contexts)
+    
+    # print("\n--- Evaluation Metrics ---")
+    # print("Context Precision Score:", context_score)
+    # print("Response Relevancy Score:", relevancy_score)
